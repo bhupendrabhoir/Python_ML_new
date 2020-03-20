@@ -1,0 +1,252 @@
+# TIME SERIES
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+%matplotlib inline
+from matplotlib.pyplot import rcParams
+rcParams['figure.figsize'] = 10,6
+
+df = pd.read_csv("AirPassengers.csv")
+
+df.head()
+
+#### Parse string to datetime type
+
+df["Month"] = pd.to_datetime(df["Month"], infer_datetime_format = True)
+idf = df.set_index(["Month"])
+
+from datetime import datetime
+
+idf
+
+#### Plot graph
+
+plt.plot(idf)
+plt.xlabel("date")
+plt.ylabel("Number of passengers")
+plt.show()
+
+#### Determine rolling Statistics
+
+rolmean = idf.rolling(window = 12).mean()
+rolstd = idf.rolling(window = 12).std()
+print(rolmean, rolstd)
+
+#### Plot rolling Statistics
+
+plt.title("Rolling Mean & Standard Deviation")
+original = plt.plot(idf, color = "blue", label = "Original")
+mean = plt.plot(rolmean, color = "red", label = "Rolling Mean")
+std = plt.plot(rolstd, color = "black", label = "Rolling Std")
+plt.legend(loc="best")
+plt.show()
+
+## Dickey-Fuller Test
+
+from statsmodels.tsa.stattools import adfuller
+
+print("Result of Dickey-fuller Test:")
+test = adfuller(idf["#Passengers"], autolag = 'AIC')
+output = pd.Series(test[0:4], index = ["Test Statistics","p-value","#Lags Used", "Number of observation used"])
+for key,value in test[4].items():
+    output["Critical Value (%s)"%key] = value
+    
+print(output)
+
+#### Estimating Trend
+
+idf_logscale = np.log(idf)
+
+plt.plot(idf_logscale)
+plt.show()
+
+moving_avg = idf_logscale.rolling(window = 12).mean()
+moving_std = idf_logscale.rolling(window = 12).std()
+plt.plot(idf_logscale)
+plt.plot(moving_avg, color = "red")
+plt.show()
+
+final = idf_logscale - moving_avg
+
+final.head(12)
+
+final.dropna(inplace = True)
+
+final.head(10)
+
+#### To determining Rolling Statistics
+
+def test_stationarity(timeseries):
+    moving_avg = timeseries.rolling(window = 12).mean()
+    moving_std = timeseries.rolling(window = 12).std()
+    
+    # plot rolling statistics
+    plt.title("Rolling Mean & Standard Deviation")
+    original = plt.plot(timeseries, color = "blue", label = "Original")
+    mean = plt.plot(moving_avg, color = "red", label = "Rolling Mean")
+    std = plt.plot(moving_std, color = "black", label = "Rolling Std")
+    plt.legend(loc="best")
+    plt.show()
+    
+    # perform Dickey-Fuller test
+    print("Result of Dickey-fuller Test:")
+    test = adfuller(timeseries["#Passengers"], autolag = 'AIC')
+    output = pd.Series(test[0:4], index = ["Test Statistics","p-value","#Lags Used", "Number of observation used"])
+    for key,value in test[4].items():
+        output["Critical Value (%s)"%key] = value
+    
+    print(output)
+
+test_stationarity(final)
+
+#### To find Exponential Decay Weighted average
+
+edwa = idf_logscale.ewm(halflife=12, min_periods = 0, adjust = True).mean()
+plt.plot(idf_logscale)
+plt.plot(edwa, color = "red")
+plt.show()
+
+#### Dataset log scale minus moving exponential Decay averge
+
+dlogmea = idf_logscale - edwa
+test_stationarity(dlogmea)
+
+#### Dataset Log Differntial Shifting
+
+dlogds = idf_logscale - idf_logscale.shift()
+plt.plot(dlogds)
+plt.show()
+
+dlogds.dropna(inplace = True)
+test_stationarity(dlogds)
+
+### To See all the plots in one layout
+
+from statsmodels.tsa.seasonal import seasonal_decompose as sd
+
+decom = sd(idf_logscale)
+
+# their are 3 types Trend, sesonal, residual 
+
+trend = decom.trend
+seasonal = decom.seasonal
+residual = decom.resid
+
+plt.subplot(411)
+plt.plot(idf_logscale, label = "Original")
+plt.legend(loc = "best")
+plt.subplot(412)
+plt.plot(trend, label = "Trend")
+plt.legend(loc = "best")
+plt.subplot(413)
+plt.plot(seasonal, label = "Seasonal")
+plt.legend(loc = "best")
+plt.subplot(414)
+plt.plot(residual, label = "Residual")
+plt.legend(loc = "best")
+plt.tight_layout()
+
+decomposedLogdata = residual
+decomposedLogdata.dropna(inplace = True)
+test_stationarity(decomposedLogdata)
+
+decomposedLogdata = residual
+decomposedLogdata.dropna(inplace = True)
+test_stationarity(decomposedLogdata)
+
+#### ACF & PACF Plots
+
+from statsmodels.tsa.stattools import acf, pacf
+
+lag_acf = acf(dlogds, nlags = 20)
+lag_pacf = pacf(dlogds, nlags = 20, method = 'ols')
+
+# ols = ordinary list square methode
+
+#### Plot ACF
+
+plt.subplot(121)
+plt.plot(lag_acf)
+plt.axhline(y=0,linestyle="--", color = "gray")
+plt.axhline(y=-1.96/np.sqrt(len(dlogds)),linestyle="--", color = "gray")
+plt.axhline(y=1.96/np.sqrt(len(dlogds)),linestyle="--", color = "gray")
+plt.title("Auto Correlation Function")
+plt.show()
+
+#### Plot PACF
+
+plt.subplot(122)
+plt.plot(lag_pacf)
+plt.axhline(y=0,linestyle="--", color = "gray")
+plt.axhline(y=-1.96/np.sqrt(len(dlogds)),linestyle="--", color = "gray")
+plt.axhline(y=1.96/np.sqrt(len(dlogds)),linestyle="--", color = "gray")
+plt.title("Partial Auto Correlation Function")
+plt.show()
+plt.tight_layout()
+
+plt.subplot(121)
+plt.plot(lag_acf)
+plt.axhline(y=0,linestyle="--", color = "gray")
+plt.axhline(y=-1.96/np.sqrt(len(dlogds)),linestyle="--", color = "gray")
+plt.axhline(y=1.96/np.sqrt(len(dlogds)),linestyle="--", color = "gray")
+plt.title("Auto Correlation Function")
+
+plt.subplot(122)
+plt.plot(lag_pacf)
+plt.axhline(y=0,linestyle="--", color = "gray")
+plt.axhline(y=-1.96/np.sqrt(len(dlogds)),linestyle="--", color = "gray")
+plt.axhline(y=1.96/np.sqrt(len(dlogds)),linestyle="--", color = "gray")
+plt.title("Partial Auto Correlation Function")
+plt.show()
+plt.tight_layout()
+
+## ARIMA Model
+
+from statsmodels.tsa.arima_model import ARIMA
+import warnings
+warnings.filterwarnings('ignore')
+
+model = ARIMA(idf_logscale, order = (2,1,2))
+predict_AR = model.fit(disp=-1)
+plt.plot(dlogds)
+plt.plot(predict_AR.fittedvalues, color = "red")
+plt.title('RSS: %.4f'% sum((predict_AR.fittedvalues-dlogds["#Passengers"])**2))
+print('Plotting AR Model')
+
+## MA Model
+
+model = ARIMA(idf_logscale, order = (0,1,2))
+predict_MA = model.fit(disp=-1)
+plt.plot(dlogds)
+plt.plot(predict_MA.fittedvalues, color = "red")
+plt.title('RSS: %.4f'% sum((predict_MA.fittedvalues-dlogds["#Passengers"])**2))
+print('Plotting MA Model')
+
+## Prediction or Forecasting ARIMA difference
+
+pred = pd.Series(predict_AR.fittedvalues, copy = True)
+print(pred.head())
+
+#### Convert to cumulative sum
+
+pred_csum = pred.cumsum()
+print(pred_csum.head())
+
+pred_AR_log = pd.Series(idf_logscale["#Passengers"].ix[0], index = idf_logscale.index)
+pred_AR_log = pred_AR_log.add(pred_csum,fill_value=0)
+pred_log.head()
+
+## TO Plot Prediction
+
+pred_AR = np.exp(pred_AR_log)
+plt.plot(idf)
+plt.plot(pred_AR)
+plt.show()
+
+idf_logscale
+
+## To forcasting in graphical format
+
+predict_AR.plot_predict(1,264)
+predict_AR.forecast(steps = 120)
